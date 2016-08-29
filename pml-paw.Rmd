@@ -1,0 +1,145 @@
+---
+title: "Predict Excercise Manner"
+author: "Zvonko Kosic"
+date: "August 26, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Project Intended Results
+The goal of your project is to predict the manner in which they did the exercise. This is the “classe” variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details.
+
+# Data
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+If you use the document you create for this class for any purpose please 
+cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+# Exploratory Data Analysis
+Readin the data into R and check their dimensions.
+```{r cache=TRUE}
+setwd("~/coursera/practical-machine-learning-assignment")
+if(!file.exists("pml-training.csv")) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", 
+                destfile = "pml-training.csv")
+}
+if(!file.exists("pml-testing.csv")) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                destfile = "pml-testing.csv")
+}
+training     <- read.csv("pml-training.csv", na.strings=c("", "NA", "NULL"))
+testing.org  <- read.csv("pml-testing.csv",  na.strings=c("", "NA", "NULL"))
+
+dim(training)
+dim(testing.org)
+```
+The next step is to remove variables that are not eligible as predictors like low variance or many 
+NA values. 
+
+```{r cache=TRUE}
+library(caret)
+nzv <- nearZeroVar(training, saveMetrics = TRUE)
+training.nzv <- training[,nzv[, 'nzv' ] == 0]
+dim(training.nzv)
+```
+Lets remove columns that really do not have any impact on the prediction on the excercise manner.
+```{r cache=TRUE}
+rm <- c('X', 'user_names', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_windows', 'num_window')
+training.nzv.rm <- training.nzv[, -which(names(training.nzv) %in% rm)]
+dim(training.nzv.rm)
+```
+The next step is to remove the columns with a lot of NA's
+```{r cache=TRUE}
+training.nzv.rm.na <- training.nzv.rm[ ,colSums(is.na(training.nzv.rm)) == 0]
+dim(training.nzv.rm.na)
+```
+Remove colinear variables
+```{r cache=TRUE}
+corr.matrix <- cor(na.omit(training.nzv.rm.na [sapply(training.nzv.rm.na, is.numeric )]))
+rm.corr <- findCorrelation(corr.matrix, cutoff = .9, verbose=FALSE)
+training.nzv.rm.na.corr <- training.nzv.rm.na[,-rm.corr]
+train <- training.nzv.rm.na.corr
+dim(train)
+```
+
+```{r}
+#train <- subset(train, select = -c(classe))
+```
+### Split Data to Training and Testing
+```{r cache=TRUE}
+library(caret)
+in.train <- createDataPartition(y=train$classe, p=0.7, list=FALSE)
+training <- train[ in.train,]
+testing  <- train[-in.train,]
+dim(training)
+dim(testing)
+```
+# Prediction Analysis
+## Regression Tree
+Start with a regression tree with summarization and a plot.
+```{r cache=TRUE}
+library(rpart)
+library(rattle)
+mod.fit.tree <- rpart(classe ~ .,method="class",data=training)
+```
+Now lets have a look at the created tree
+```{r cache=TRUE}
+fancyRpartPlot(mod.fit.tree)
+```
+
+## Cross Validation
+Lets predict an see how good the regression tree fits as a model
+```{r cache=TRUE}
+pred.tree <- predict(mod.fit.tree, testing, type="class")
+confusionMatrix(pred.tree, testing$classe)
+```
+With an accuracy of **0.7298** we are not really good ad predicting lets try another
+method an see if the results can get better.
+
+## Random Forests
+Random forests fit a whole bunch of random decision trees and fit the best combination
+of them for a prediction model.
+```{r cache=FALSE}
+require(randomForest)
+set.seed(666)
+mod.fit.rf <- randomForest(classe~., data=training, ntree=100, importance=TRUE)
+mod.fit.rf
+```
+Now predict with the fitted random forest model.
+```{r cache=FALSE}
+require(caret)
+require(randomForest)
+pred.rf <- predict(mod.fit.rf, testing, type="class")
+confusionMatrix(pred.rf, testing$classe)
+```
+With **random forest** approach we get an accuracy of **99,47%** which is much better
+than with a simple regression tree approach. 
+```{r cache=TRUE}
+require(randomForest)
+varImpPlot(mod.fit.rf)
+```
+This plot shows the important variables of the model they form a part of prediction power of the **Random Forest** model. If the top variable from the model is dropped, the prediction power will greatly reduce. On the other hand if a variable from the bottom is remove, there might not be much impact on prediction power of the model.
+
+#Results
+Now generate the Answers for Quiz 4 and submit them via the coursera webpage.
+```{r cache=FALSE}
+result <- predict(mod.fit.rf, testing.org)
+result
+
+```
+
+
