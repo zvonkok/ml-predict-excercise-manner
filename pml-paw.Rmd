@@ -3,8 +3,8 @@ title: "Predict Excercise Manner"
 author: "Zvonko Kosic"
 date: "August 26, 2016"
 output: 
-  html_document:
-    self_contained: false
+  github_document
+    
 ---
 
 ```{r setup, include=FALSE}
@@ -53,7 +53,7 @@ The next step is to remove variables that are not eligible as predictors like lo
 NA values. 
 
 ```{r cache=TRUE}
-library(caret)
+# library(caret)
 nzv <- nearZeroVar(training, saveMetrics = TRUE)
 training.nzv <- training[,nzv[, 'nzv' ] == 0]
 dim(training.nzv)
@@ -137,7 +137,7 @@ varImpPlot(mod.fit.rf)
 This plot shows the important variables of the model they form a part of prediction power of the **Random Forest** model. If the top variable from the model is dropped, the prediction power will greatly reduce. On the other hand if a variable from the bottom is remove, there might not be much impact on prediction power of the model.
 
 #Results
-Now generate the Answers for Quiz 4 and submit them via the coursera webpage.
+Now generate the Answers.
 ```{r cache=FALSE}
 result <- predict(mod.fit.rf, testing.org)
 result
